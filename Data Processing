@@ -1,0 +1,143 @@
+import nump as np
+import pandas as pd
+from matplotib import pyplot as plt
+
+DIRECTORY = '../input/cubems-smart-building-energy-and-iaq-data'
+
+pathDatasets = []
+
+for file in os.listdir(DIRECTORY):
+    if file.endswith(".csv"):
+        pathDatasets.append(os.path.join(DIRECTORY, file))
+        
+#pathDatasets = pathDatasets.sort()
+pathDatasets = sorted(pathDatasets, key = lambda x: x.split('/')[3])
+
+# loading the whole data into fullDataset
+fullDataset = []
+for path in pathDatasets:
+    fullDataset.append(pd.read_csv(path))
+    
+    
+# Deleting non consumption data from the datasets, temperature, humadity and lux data deletion from the datasets
+def dropTempHumData(data):
+    
+    for i in range(0, len(data)):
+        itemColumns = data[i].columns
+        excludeColumns = ['(degC)', '(RH%)', '(lux)'] # columsn having these units are to be removed these are not consumption data
+        dropColumns = []
+        
+        for column in itemColumns: # check which column to delete and add it the dropColumns list 
+            for excludeItem in excludeColumns:
+                if excludeItem in column:
+                    dropColumns.append(column)
+        
+        data[i].drop(dropColumns, axis=1, inplace=True) # delete columns that doesnot contain consumption data
+        
+    return(data)
+
+
+# concnate the years ie 2018 and 2019
+def concnateYears(data):
+    
+    newData = []
+    
+    for i in range(0,7):
+        x = data[i]
+        y = x.append(data[i+7])
+        newData.append(y)
+        
+        
+    return newData
+
+
+# convert index of every dataset to the date time object
+def dateConversion(data):
+    
+    for i in range(0, len(data)):
+        data[i].index = pd.to_datetime(data[i].Date, infer_datetime_format=True, errors='coerce')
+        data[i].drop('Date', axis=1, inplace = True)
+    
+    return(data)
+
+
+# replace the null values wuing interpolation
+def imputeMissingValuesInterpolation(data):
+    
+    fullData = []
+    for item in data:
+        fullData.append(item.interpolate(method='linear', limit_direction='forward'))
+    
+    return fullData
+
+
+def aggregateData(data):
+    
+    for i in range(0, len(data)):
+        columns = data[i].columns
+        data[i]['Consumption'] = data[i].sum(axis = 1)
+        #data[i].drop(columns, axis=1, inplace=True)
+        
+    return data
+    
+   
+   
+   
+   
+   
+fullDataset = dropTempHumData(fullDataset)
+fullDataset = concnateYears(fullDataset)
+fullDataset = dateConversion(fullDataset)
+
+
+
+for i in range(0, len(fullDataset)):
+    fullDataset[i].plot()
+    plt.show()
+    
+    
+index = fullDataset[0][['z3_Light(kW)']].idxmax()
+fullDataset[0]['z3_Light(kW)'][index] = fullDataset[0]['z3_Light(kW)'].median()
+
+
+
+def checkNullValues(data):
+    info = []
+    for item in data:
+        info.append(item.isnull().sum())
+    return info
+    
+   
+   
+   
+   
+checkNullValues(fullDataset)
+for i in range(0, len(fullDataset)):
+    fullDataset[i] = fullDataset[i][:689128]
+    
+ 
+def dropExtraColumns(data):
+    
+    for i in range(0, len(data)):
+        columns = data[i].columns
+        columns = columns[:len(columns)-1]
+        data[i].drop(columns, axis=1, inplace = True)
+        
+    
+    return data
+    
+    
+fullDataset = dropExtraColumns(fullDataset)
+
+
+
+def aggregateFloors(data):
+    
+    for i in range(1, len(data)):
+        data[0] = data[0] + data[i]
+        
+    return data[0]
+
+fullDataset = aggregateFloors(fullDataset)
+fullDataset.to_csv('DataConsumption.csv')
+  
